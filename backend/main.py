@@ -2,9 +2,9 @@ import joblib
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from keras.models import load_model
-from .api import prediction
+from api import prediction
 
-MODEL_PATH = 'cursova/models&scaller&features/'
+MODEL_PATH = 'models&scaller&features/'
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

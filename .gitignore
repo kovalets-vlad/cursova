@@ -9,4 +9,6 @@ __pycache__/
 alembic/ver
 /daily_fitbit_sema_df_processed.csv
 /Проєкт_на_тему_'Аналіз_візуалізація,_прогноз_показників_фітнес_трекера' (6).docx
-/OLD
+old/
+test/
+models&scaller&features&test/

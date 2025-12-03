@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Request, HTTPException
 import pandas as pd
 import numpy as np
-from ..utils.request_utils import generate_user_advice
-from ..schemas.health_model import HealthDataRequest, PredictionRequest
+from utils.request_utils import generate_user_advice
+from schemas.health_model import HealthDataRequest, PredictionRequest
 
 router = APIRouter()
 
