@@ -1,0 +1,11 @@
+/venv
+/.vscode
+/database.db 
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+alembic/ver
+/daily_fitbit_sema_df_processed.csv
+/Проєкт_на_тему_'Аналіз_візуалізація,_прогноз_показників_фітнес_трекера' (6).docx
