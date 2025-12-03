@@ -1,6 +1,6 @@
 /venv
 /.vscode
-/database.db 
+database.db/
 __pycache__/
 *.pyc
 *.pyo
@@ -12,3 +12,4 @@ alembic/ver
 old/
 test/
 models&scaller&features&test/
+start.txt
