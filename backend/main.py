@@ -1,5 +1,6 @@
 import joblib
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from keras.models import load_model
 from api import prediction, auth, user, data
@@ -38,7 +39,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Cursova-Backend", lifespan=lifespan)
 
+origins = [
+    "http://localhost:5173",  
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,      
+    allow_credentials=True,      
+    allow_methods=["*"],         
+    allow_headers=["*"],         
+)
+
 app.include_router(prediction.router, prefix="/api", tags=["Prediction"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(user.router, prefix="/api", tags=["User"])
-app.include_router(data.router, prefix="/api/data", tags=["Data Management"])
+app.include_router(data.router, prefix="/api/stats", tags=["Data Management"])
