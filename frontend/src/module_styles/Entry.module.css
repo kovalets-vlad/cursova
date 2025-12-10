@@ -1,0 +1,148 @@
+/* --- Контейнер сторінки --- */
+.container {
+    max-width: 672px;
+    margin: 0 auto;
+    animation: slideUp 0.5s ease-out forwards;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Обгортка картки */
+.cardWrapper {
+    padding: 32px;
+}
+
+.title {
+    font-size: 24px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 24px;
+    border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+    padding-bottom: 16px;
+}
+
+/* --- СЕКЦІЯ ВИБОРУ ДАТИ --- */
+.datePickerSection {
+    margin-bottom: 24px;
+    padding: 16px;
+    background-color: rgba(15, 23, 42, 0.4); /* dark slate */
+    border-radius: 12px;
+    border: 1px solid rgba(51, 65, 85, 0.5);
+}
+
+.dateLabel {
+    display: block;
+    color: #94a3b8; /* slate-400 */
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.dateControls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.quickDateBtn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    background-color: rgba(30, 41, 59, 0.5); /* dark button */
+    color: #94a3b8;
+    border: 1px solid rgba(51, 65, 85, 0.5);
+}
+
+.quickDateBtn:hover:not(.quickDateBtnActive) {
+    background-color: rgba(51, 65, 85, 0.8);
+    color: #fff;
+}
+
+.quickDateBtnActive {
+    background-color: #3b82f6; /* blue-500 */
+    color: #fff;
+    border-color: #3b82f6;
+    box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+}
+
+.calendarBtn {
+    padding: 8px;
+    border-radius: 8px;
+    background-color: #3b82f6;
+    color: #fff;
+    border: none;
+    transition: background-color 0.2s;
+    cursor: pointer;
+    margin-left: auto; /* Push to the right */
+}
+
+.calendarBtn:hover {
+    background-color: #2563eb; /* blue-600 */
+}
+
+/* --- СІТКА РУЧНОГО ВВЕДЕННЯ --- */
+.manualEntryGrid {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+@media (min-width: 768px) {
+    .manualEntryGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.singleInputRow {
+    grid-column: 1 / -1; /* Займає всю ширину */
+}
+
+.calendarPlaceholder {
+    color: #64748b;
+    font-style: italic;
+    padding: 16px;
+    border: 1px dashed #475569;
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+/* --- КНОПКА ЗБЕРЕЖЕННЯ --- */
+.saveBtn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background-color: #10b981; /* emerald-500 */
+    color: #fff;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.saveBtn:hover {
+    background-color: #059669; /* emerald-600 */
+}
+
+.saveBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+}

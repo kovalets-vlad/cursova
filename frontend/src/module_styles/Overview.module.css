@@ -1,0 +1,266 @@
+/* --- Загальна обгортка та сітка --- */
+.pageWrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 24px; /* space-y-6 */
+}
+
+.grid2Col {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+}
+@media (min-width: 768px) {
+    .grid2Col {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* --- КОНТРОЛЬНА ПАНЕЛЬ (HEADER) --- */
+.controlsHeader {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(19, 22, 31, 0.7); /* slate-900/50 */
+    padding: 16px;
+    border-radius: 16px;
+    border: 1px solid #334155; /* slate-800 */
+    gap: 16px;
+}
+@media (min-width: 768px) {
+    .controlsHeader {
+        flex-direction: row;
+    }
+}
+
+/* Перемикач діапазону */
+.rangeSwitcher {
+    display: flex;
+    background-color: #0f172a; /* slate-950 */
+    padding: 4px;
+    border-radius: 12px;
+    border: 1px solid #334155;
+}
+
+.rangeBtn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+    border: none;
+    cursor: pointer;
+}
+
+.rangeBtnActive {
+    background-color: #1e293b; /* slate-800 */
+    color: #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.rangeBtnInactive {
+    background-color: transparent;
+    color: #94a3b8; /* slate-400 */
+}
+
+.rangeBtnInactive:hover {
+    color: #fff;
+}
+
+/* Навігація датами */
+.dateNavigator {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background-color: #0f172a;
+    padding: 8px 16px;
+    border-radius: 12px;
+    border: 1px solid #334155;
+}
+
+.navBtn {
+    padding: 4px;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: #94a3b8;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.navBtn:hover {
+    background-color: #1e293b;
+    color: #fff;
+}
+
+.dateLabel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 150px;
+    justify-content: center;
+    font-weight: 700;
+    color: #fff;
+    text-transform: capitalize;
+}
+
+.calendarIcon {
+    color: #3b82f6; /* blue-500 */
+}
+
+/* --- KPI CARDS (DAY VIEW) --- */
+.kpiGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    animation: fadeIn 0.5s ease-out;
+}
+@media (min-width: 768px) {
+    .kpiGrid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.kpiLabel {
+    color: #94a3b8;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.kpiValue {
+    font-size: 32px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.kpiUnit {
+    font-size: 16px;
+    color: #64748b;
+    font-weight: 400;
+}
+
+/* Градієнти для KPI карток */
+.kpiCardblue {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.2) 0%, rgba(15, 23, 42, 0.8) 100%);
+    border-color: rgba(59, 130, 246, 0.3);
+}
+.kpiCardgreen {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(15, 23, 42, 0.8) 100%);
+    border-color: rgba(34, 197, 94, 0.3);
+}
+.kpiCardpurple {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(15, 23, 42, 0.8) 100%);
+    border-color: rgba(168, 85, 247, 0.3);
+}
+.kpiCardorange {
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(15, 23, 42, 0.8) 100%);
+    border-color: rgba(249, 115, 22, 0.3);
+}
+.kpiCardblue .kpiValue {
+    color: #60a5fa;
+}
+.kpiCardgreen .kpiValue {
+    color: #4ade80;
+}
+.kpiCardpurple .kpiValue {
+    color: #c084fc;
+}
+.kpiCardorange .kpiValue {
+    color: #fb923c;
+}
+
+/* --- CHART STYLES (WEEK/MONTH VIEW) --- */
+.chartContainerWrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.chartCard {
+    height: 320px;
+}
+
+.chartCardSmall {
+    height: 300px;
+}
+
+.chartTitle {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.chartTitleSmall {
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.titleIndicatorBlue,
+.titleIndicatorGreen,
+.titleIndicatorPurple {
+    width: 8px;
+    height: 24px;
+    border-radius: 4px;
+}
+.titleIndicatorGreen {
+    background-color: #22c55e;
+}
+.titleIndicatorBlue {
+    background-color: #3b82f6;
+}
+.titleIndicatorPurple {
+    background-color: #a855f7;
+}
+
+/* Стилізація Tooltip (спливаючої підказки) */
+.tooltipStyle {
+    background-color: #0f172a !important; /* slate-950 */
+    border: 1px solid #334155 !important;
+    border-radius: 8px;
+    padding: 8px;
+    color: #fff;
+}
+
+/* --- EMPTY STATE --- */
+.emptyState {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 300px;
+    color: #64748b; /* slate-500 */
+    border: 2px dashed #334155;
+    border-radius: 16px;
+    background-color: rgba(15, 23, 42, 0.2);
+    animation: fadeIn 0.5s ease-out;
+}
+
+.emptyIcon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+}
+
+.emptyText {
+    font-size: 18px;
+}
+
+/* Анімації */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
