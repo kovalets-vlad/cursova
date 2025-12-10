@@ -58,11 +58,11 @@ async def create_manual_stats(
     
     return {"message": "Stats created successfully", "data": new_stats}
 
-@router.get("/", response_model=List[DailyStatsCreate]) # Або створи окрему схему Response
+@router.get("/", response_model=List[DailyStatsCreate]) # 
 async def get_all_stats(
     session: AsyncSessionDep,
     current_user: User = Depends(get_current_user),
-    limit: int = 30, # Обмежимо, наприклад, останніми 30 записами
+    limit: int = 30,
     offset: int = 0
 ):
     query = select(DailyStats).where(

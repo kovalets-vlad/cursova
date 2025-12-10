@@ -1,102 +1,144 @@
 import React, { useState } from "react";
 import { Activity } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
-import { Card, Input } from "../components/UI.jsx";
+import styles from "../module_styles/AuthPage.module.css";
 
 const AuthPage = () => {
     const { login, register } = useAuth();
     const [isLogin, setIsLogin] = useState(true);
-    const [formData, setFormData] = useState({ username: "", password: "", email: "" });
+    const navigate = useNavigate();
+    const [formData, setFormData] = useState({ username: "", password: "", confirmPassword: "" });
     const [error, setError] = useState("");
 
     const handleChange = (name, value) => {
         setFormData((prev) => ({ ...prev, [name]: value }));
+        setError("");
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
 
-        // Перевірка на пусті поля
-        if (!formData.username || !formData.password || (!isLogin && !formData.email)) {
-            setError("Будь ласка, заповніть усі поля.");
+        // Валідація
+        if (!formData.username || !formData.password) {
+            setError("Заповніть всі поля");
+            return;
+        }
+
+        if (!isLogin && formData.password !== formData.confirmPassword) {
+            setError("Паролі не співпадають");
             return;
         }
 
         const res = isLogin
             ? await login(formData.username, formData.password)
-            : await register(formData.username, formData.password, formData.email);
+            : await register(formData.username, formData.password);
 
-        if (!res.success) setError(res.error);
+        if (res.success) {
+            navigate("/", { replace: true });
+        } else {
+            setError(res.error);
+        }
     };
+    const containerClass = `${styles.container} ${!isLogin ? styles["right-panel-active"] : ""}`;
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
-            <Card className="w-full max-w-md border-slate-800 bg-slate-900/80">
-                <div className="text-center mb-8">
-                    <div className="inline-flex p-3 bg-blue-600 rounded-xl mb-4 shadow-lg shadow-blue-500/20">
-                        <Activity className="w-8 h-8 text-white" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-white">Pulse AI</h1>
-                    <p className="text-slate-400">Твій розумний кардіо-асистент</p>
-                </div>
-
-                <div className="flex bg-slate-800 rounded-lg p-1 mb-6">
-                    <button
-                        onClick={() => {
-                            setIsLogin(true);
-                            setError("");
-                        }}
-                        className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
-                            isLogin ? "bg-slate-700 text-white shadow" : "text-slate-400"
-                        }`}
-                    >
-                        Вхід
-                    </button>
-                    <button
-                        onClick={() => {
-                            setIsLogin(false);
-                            setError("");
-                        }}
-                        className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
-                            !isLogin ? "bg-slate-700 text-white shadow" : "text-slate-400"
-                        }`}
-                    >
-                        Реєстрація
-                    </button>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <Input label="Логін" value={formData.username} onChange={(v) => handleChange("username", v)} />
-                    {!isLogin && (
-                        <Input
-                            label="Email"
-                            type="email"
-                            value={formData.email}
-                            onChange={(v) => handleChange("email", v)}
+        <div className={styles.bodyWrapper}>
+            <div className={containerClass} id="container">
+                <div className={`${styles["form-container"]} ${styles["sign-up-container"]}`}>
+                    <form className={styles.form} onSubmit={(e) => handleSubmit(e, "register")}>
+                        <h1 className={styles.title}>Реєстрація</h1>
+                        <span className={styles.subtitle}>Використовуйте свій логін</span>
+                        <input
+                            type="text"
+                            placeholder="Логін"
+                            className={styles.input}
+                            value={formData.username}
+                            onChange={(e) => handleChange("username", e.target.value)}
                         />
-                    )}
-                    <Input
-                        label="Пароль"
-                        type="password"
-                        value={formData.password}
-                        onChange={(v) => handleChange("password", v)}
-                    />
+                        <input
+                            type="password"
+                            placeholder="Пароль"
+                            className={styles.input}
+                            value={formData.password}
+                            onChange={(e) => handleChange("password", e.target.value)}
+                        />
+                        <input
+                            type="password"
+                            placeholder="Повторіть пароль"
+                            className={styles.input}
+                            value={formData.confirmPassword}
+                            onChange={(e) => handleChange("confirmPassword", e.target.value)}
+                        />
+                        {error && !isLogin && <p className={styles.error}>{error}</p>}
+                        <button className={styles.button}>Створити</button>
+                    </form>
+                </div>
 
-                    {error && (
-                        <div className="text-red-400 text-sm bg-red-500/10 p-3 rounded-lg border border-red-500/20">
-                            {error}
+                {/* --- ФОРМА ВХОДУ (Зліва в референсі) --- */}
+                <div className={`${styles["form-container"]} ${styles["sign-in-container"]}`}>
+                    <form className={styles.form} onSubmit={(e) => handleSubmit(e, "login")}>
+                        <h1 className={styles.title}>Вхід</h1>
+                        <span className={styles.subtitle}>Увійдіть у свій акаунт</span>
+                        <input
+                            type="text"
+                            placeholder="Логін"
+                            className={styles.input}
+                            value={formData.username}
+                            onChange={(e) => handleChange("username", e.target.value)}
+                        />
+                        <input
+                            type="password"
+                            placeholder="Пароль"
+                            className={styles.input}
+                            value={formData.password}
+                            onChange={(e) => handleChange("password", e.target.value)}
+                        />
+                        <label className={styles.checkboxLabel}>
+                            <input type="checkbox" /> Запом'ятати мене
+                        </label>
+                        {error && isLogin && <p className={styles.error}>{error}</p>}
+                        <button className={styles.button}>Увійти</button>
+                        <a href="#" className={styles.link}>
+                            Забули пароль?
+                        </a>
+                    </form>
+                </div>
+
+                {/* --- OVERLAY (Рухома кольорова панель) --- */}
+                <div className={styles["overlay-container"]}>
+                    <div className={styles.overlay}>
+                        {/* Ліва частина Overlay (видно при Реєстрації) */}
+                        <div className={`${styles["overlay-panel"]} ${styles["overlay-left"]}`}>
+                            <Activity size={40} className="mb-4" />
+                            <h1 className={styles["title-white"]}>Вже з нами?</h1>
+                            <p className={styles["overlay-text"]}>
+                                Увійди в систему, щоб продовжити тренування з Pulse AI.
+                            </p>
+                            <button className={`${styles.button} ${styles.ghost}`} onClick={() => setIsLogin(true)}>
+                                Увійти
+                            </button>
                         </div>
-                    )}
 
-                    <button
-                        type="submit"
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-medium transition-all shadow-lg shadow-blue-500/25"
-                    >
-                        {isLogin ? "Увійти в систему" : "Створити акаунт"}
-                    </button>
-                </form>
-            </Card>
+                        {/* Права частина Overlay (видно при Вході) */}
+                        <div className={`${styles["overlay-panel"]} ${styles["overlay-right"]}`}>
+                            <Activity size={40} className="mb-4" />
+                            <h1 className={styles["title-white"]}>Привіт, друже!</h1>
+                            <p className={styles["overlay-text"]}>
+                                Зареєструйся та почни свою подорож до здорового тіла.
+                            </p>
+                            <button className={`${styles.button} ${styles.ghost}`} onClick={() => setIsLogin(false)}>
+                                Реєстрація
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {/* Логотип по центру (декоративний) */}
+                <div className={styles["center-logo"]}>
+                    <Activity size={30} color="#dc2626" />
+                </div>
+            </div>
         </div>
     );
 };

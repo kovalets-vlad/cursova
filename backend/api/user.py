@@ -8,6 +8,27 @@ from db.session import AsyncSessionDep
 
 router = APIRouter()
 
+@router.get("/user/me")
+async def get_user_profile(
+    current_user: Annotated[User, Depends(get_current_user)], 
+    session: AsyncSessionDep
+):
+    query = select(User).where(User.id == current_user.id)
+    result = await session.execute(query)
+    user = result.scalars().first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "id": user.id,
+        "username": user.username,
+        "age": user.age,
+        "weight": user.weight,
+        "height": user.height,
+        "bmi": user.bmi
+    }
+
 @router.patch("/user/update")
 async def update_user_profile(
     profile_data: UserProfileUpdate, 

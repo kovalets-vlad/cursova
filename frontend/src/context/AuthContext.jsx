@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem("token", res.data.access_token);
             localStorage.setItem("refresh_token", res.data.refresh_token);
 
-            const userData = { username };
+            const userData = await api.get("/api/user/me").then((response) => response.data);
             localStorage.setItem("user", JSON.stringify(userData));
             setUser(userData);
             return { success: true };

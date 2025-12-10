@@ -1,0 +1,297 @@
+.bodyWrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    width: 100vw;
+    background-color: #f3f4f6;
+    font-family: "Montserrat", sans-serif;
+    overflow: hidden;
+}
+
+/* --- Головна картка --- */
+.container {
+    background-color: #fff;
+    border-radius: 20px;
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.25), 0 10px 10px rgba(0, 0, 0, 0.22);
+    position: relative;
+    overflow: hidden;
+    width: 900px; /* Фіксована ширина для десктопу */
+    max-width: 95%; /* Адаптивність для менших екранів */
+    min-height: 600px;
+}
+
+/* --- Стилі форм --- */
+.form-container {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    transition: all 0.6s ease-in-out;
+}
+
+.form {
+    background-color: #ffffff; /* Явно білий фон форми */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 0 50px;
+    height: 100%;
+    text-align: center;
+}
+
+.title {
+    font-weight: 800; /* Жирніший шрифт */
+    margin: 0;
+    color: #1f2937; /* Темно-сірий колір (майже чорний) */
+    font-size: 2rem;
+    margin-bottom: 1rem;
+}
+
+.subtitle {
+    font-size: 14px;
+    color: #6b7280; /* Сірий колір для підзаголовка */
+    margin-bottom: 20px;
+}
+
+/* --- ВИПРАВЛЕНІ ІНПУТИ --- */
+.input {
+    background-color: #f3f4f6; /* Світло-сірий фон інпуту */
+    border: 1px solid transparent; /* Прозора рамка для запобігання стрибків */
+    padding: 12px 15px;
+    margin: 8px 0;
+    width: 100%;
+    border-radius: 8px;
+    outline: none;
+
+    /* Стилі тексту всередині */
+    color: #333333; /* Темний колір тексту */
+    font-size: 14px;
+    font-weight: 500;
+
+    /* Плавний перехід */
+    transition: all 0.3s ease;
+}
+
+/* Ефект при наведенні */
+.input:hover {
+    background-color: #e5e7eb; /* Трохи темніший сірий */
+}
+
+/* Ефект при фокусі (коли пишеш) */
+.input:focus {
+    background-color: #ffffff;
+    border-color: #db2745; /* Червона рамка */
+    box-shadow: 0 0 0 4px rgba(219, 39, 69, 0.1); /* Легке світіння */
+}
+
+/* Placeholder (текст-підказка) */
+.input::placeholder {
+    color: #9ca3af;
+}
+
+/* --- Кнопки --- */
+.button {
+    border-radius: 20px;
+    border: 1px solid #db2745;
+    background-color: #db2745;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 12px 45px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: transform 80ms ease-in, background-color 0.3s;
+    cursor: pointer;
+    margin-top: 20px;
+}
+
+.button:hover {
+    background-color: #be123c; /* Темніший червоний при наведенні */
+}
+
+.button:active {
+    transform: scale(0.95);
+}
+
+.ghost {
+    background-color: transparent;
+    border-color: #ffffff;
+    margin-top: 20px;
+}
+
+.ghost:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.link {
+    color: #333;
+    font-size: 14px;
+    text-decoration: none;
+    margin: 15px 0;
+    border-bottom: 1px dashed transparent;
+    transition: border-color 0.3s;
+}
+
+.link:hover {
+    border-bottom-color: #333;
+}
+
+.error {
+    color: #ef4444;
+    font-size: 24px;
+    margin-top: 5px;
+    font-weight: 500;
+}
+
+.checkboxLabel {
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    color: #4b5563;
+    margin-top: 10px;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+    cursor: pointer;
+}
+.checkboxLabel input {
+    cursor: pointer;
+}
+
+/* --- ЛОГІКА СЛАЙДЕРА (Без змін, тут все було ок) --- */
+.sign-in-container {
+    left: 0;
+    width: 50%;
+    z-index: 2;
+}
+
+.sign-up-container {
+    left: 0;
+    width: 50%;
+    opacity: 0;
+    z-index: 1;
+}
+
+.container.right-panel-active .sign-in-container {
+    transform: translateX(100%);
+}
+
+.container.right-panel-active .sign-up-container {
+    transform: translateX(100%);
+    opacity: 1;
+    z-index: 5;
+    animation: show 0.6s;
+}
+
+@keyframes show {
+    0%,
+    49.99% {
+        opacity: 0;
+        z-index: 1;
+    }
+    50%,
+    100% {
+        opacity: 1;
+        z-index: 5;
+    }
+}
+
+/* --- OVERLAY --- */
+.overlay-container {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 50%;
+    height: 100%;
+    overflow: hidden;
+    transition: transform 0.6s ease-in-out;
+    z-index: 100;
+}
+
+.container.right-panel-active .overlay-container {
+    transform: translateX(-100%);
+}
+
+.overlay {
+    background: #db2745;
+    background: -webkit-linear-gradient(to right, #ff4b2b, #db2745);
+    background: linear-gradient(to right, #ff4b2b, #db2745);
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: 0 0;
+    color: #ffffff;
+    position: relative;
+    left: -100%;
+    height: 100%;
+    width: 200%;
+    transform: translateX(0);
+    transition: transform 0.6s ease-in-out;
+}
+
+.container.right-panel-active .overlay {
+    transform: translateX(50%);
+}
+
+.overlay-panel {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+    top: 0;
+    height: 100%;
+    width: 50%;
+    transform: translateX(0);
+    transition: transform 0.6s ease-in-out;
+}
+
+.title-white {
+    font-weight: 800;
+    margin: 0;
+    color: #ffffff;
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.overlay-text {
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.5;
+    margin: 20px 40px 30px;
+    color: #ffffff;
+}
+
+.overlay-left {
+    transform: translateX(-20%);
+}
+.overlay-right {
+    right: 0;
+    transform: translateX(0);
+}
+
+.container.right-panel-active .overlay-left {
+    transform: translateX(0);
+}
+.container.right-panel-active .overlay-right {
+    transform: translateX(20%);
+}
+
+/* Логотип */
+.center-logo {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 200;
+    background: white;
+    padding: 15px;
+    border-radius: 50%;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    pointer-events: none;
+    transition: transform 0.6s ease-in-out;
+}
+.container.right-panel-active .center-logo {
+    transform: translate(-50%, -50%) rotate(360deg);
+}
