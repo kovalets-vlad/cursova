@@ -1,50 +1,50 @@
-import React, { useState, useEffect } from "react";
-import { Brain, Heart, Activity } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Brain, Heart, Activity, RefreshCw, AlertCircle } from "lucide-react";
 import api from "../api/axiosConfig.js";
 import { Card } from "../components/UI.jsx";
+import { useStats } from "../context/StatsContext.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
+import styles from "../module_styles/Forecast.module.css";
 
 const Forecast = () => {
-    const [stats, setStats] = useState([]);
-    const [loading, setLoading] = useState(false);
+    const { stats, fetchStats, isLoaded } = useStats();
+    const { user } = useAuth();
+
+    const [predictLoading, setPredictLoading] = useState(false);
     const [prediction, setPrediction] = useState(null);
     const [aiAdvice, setAiAdvice] = useState(null);
     const [error, setError] = useState("");
 
-    // Нам потрібна статистика, щоб передати останні дані в ШІ для поради
+    // Завантажуємо статистику в контекст, якщо її ще немає
     useEffect(() => {
-        const loadStats = async () => {
-            try {
-                const res = await api.get("/api/stats/");
-                setStats(res.data.sort((a, b) => new Date(a.date) - new Date(b.date)));
-            } catch (e) {
-                console.error("Помилка завантаження статистики для прогнозу", e);
-            }
-        };
-        loadStats();
-    }, []);
+        fetchStats();
+    }, [fetchStats]);
+
+    // Знаходимо останній запис у відсортованому масиві через useMemo
+    const lastStat = useMemo(() => {
+        if (!stats.length) return null;
+        return [...stats].sort((a, b) => new Date(a.date) - new Date(b.date))[stats.length - 1];
+    }, [stats]);
 
     const handlePredict = async () => {
-        setLoading(true);
+        setPredictLoading(true);
         setPrediction(null);
         setAiAdvice(null);
         setError("");
 
         try {
-            // 1. Отримуємо прогноз (цифри)
+            // 1. Отримуємо прогноз від ML моделі
             const res = await api.post("/api/predict_pulse");
             setPrediction(res.data);
 
-            // 2. Отримуємо пораду від ШІ
-            // Беремо останній запис зі статистики або дефолтні значення, якщо пусто
-            const lastStat = stats[stats.length - 1] || {};
-
+            // 2. Отримуємо пораду від LLM (ШІ), використовуючи дані з контексту та профілю
             const adviceRes = await api.post("/api/prediction/advice", {
                 user_stats: {
-                    age: 30, // Можна пізніше винести в профіль
-                    stress_score: lastStat.stress_score || 50,
-                    minutesAsleep: lastStat.minutesAsleep || 400,
-                    sleep_efficiency: lastStat.sleep_efficiency || 85,
-                    steps: lastStat.steps || 5000,
+                    age: user?.age || 25, // Беремо реальний вік з профілю
+                    stress_score: lastStat?.stress_score || 50,
+                    minutesAsleep: lastStat?.minutesAsleep || 420,
+                    sleep_efficiency: lastStat?.sleep_efficiency || 85,
+                    steps: lastStat?.steps || 5000,
                     acwr: res.data.acwr_from_backend || 1.0,
                 },
                 prediction_delta: res.data.predicted_delta,
@@ -56,98 +56,77 @@ const Forecast = () => {
             setError("Помилка прогнозу. Перевірте, чи достатньо даних (мінімум 5 днів).");
             console.error(e);
         } finally {
-            setLoading(false);
+            setPredictLoading(false);
         }
     };
 
     return (
-        <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
-            {/* Header Section */}
+        <div className={styles.container}>
             {!prediction ? (
-                <div className="text-center py-10">
-                    <div className="w-24 h-24 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 border border-slate-700 shadow-xl shadow-blue-900/20">
-                        <Brain className="w-12 h-12 text-blue-500" />
+                <div className={styles.heroSection}>
+                    <div className={styles.brainWrapper}>
+                        <Brain className={styles.brainIcon} />
                     </div>
-                    <h3 className="text-2xl text-white font-bold mb-2">ШІ Аналіз Відновлення</h3>
-                    <p className="text-slate-400 mb-8 max-w-lg mx-auto">
-                        Нейромережа проаналізує твої показники за останні 7 днів та спрогнозує стан на завтра.
+                    <h3 className={styles.heroTitle}>ШІ Аналіз Відновлення</h3>
+                    <p className={styles.heroDescription}>
+                        Нейромережа Pulse AI проаналізує твої показники за останні 7 днів, розрахує ACWR (навантаження)
+                        та спрогнозує стан серцево-судинної системи.
                     </p>
 
                     <button
                         onClick={handlePredict}
-                        disabled={loading || stats.length < 5}
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold text-lg shadow-lg shadow-blue-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={predictLoading || stats.length < 5}
+                        className={styles.predictBtn}
                     >
-                        {loading ? (
-                            <span className="flex items-center gap-2">
-                                <span className="animate-spin h-4 w-4 border-2 border-white/50 border-t-white rounded-full"></span>
-                                Аналізую...
+                        {predictLoading ? (
+                            <span className={styles.loaderWrapper}>
+                                <RefreshCw className={styles.spinner} size={20} />
+                                Запускаю нейромережі...
                             </span>
                         ) : (
                             "Згенерувати прогноз"
                         )}
                     </button>
 
-                    {error && (
-                        <p className="mt-4 text-red-400 text-sm bg-red-900/20 py-2 px-4 rounded-lg inline-block">
-                            {error}
-                        </p>
-                    )}
-
-                    {stats.length < 5 && !error && (
-                        <p className="mt-4 text-yellow-500 text-sm">
-                            * Потрібно ще {5 - stats.length} днів даних для точного прогнозу.
-                        </p>
+                    {stats.length < 5 && (
+                        <div className={styles.warningBox}>
+                            <AlertCircle size={16} />
+                            <span>Потрібно ще {5 - stats.length} дн. даних для аналізу</span>
+                        </div>
                     )}
                 </div>
             ) : (
-                /* Results Section */
-                <div className="space-y-6 text-left">
-                    <div className="grid md:grid-cols-2 gap-6">
-                        {/* Prediction Card */}
-                        <Card className="bg-gradient-to-br from-indigo-900/40 to-slate-900 border-indigo-500/30">
-                            <div className="flex items-center gap-2 mb-4 text-indigo-300">
-                                <Heart className="w-5 h-5" /> Прогноз пульсу спокою
+                <div className={styles.resultsWrapper}>
+                    <div className={styles.statsRow}>
+                        {/* КАРТКА ПРОГНОЗУ */}
+                        <Card className={styles.predictionCard}>
+                            <div className={styles.cardHeader}>
+                                <Heart className="text-pink-500" size={20} />
+                                <span>Прогноз пульсу спокою (RHR)</span>
                             </div>
-                            <div className="flex items-baseline gap-3">
-                                <span className="text-5xl font-bold text-white">
-                                    {prediction.predicted_bpm.toFixed(1)}
-                                </span>
-                                <span
-                                    className={`text-xl font-medium ${
-                                        prediction.predicted_delta > 0 ? "text-red-400" : "text-green-400"
+                            <div className={styles.mainValueWrapper}>
+                                <span className={styles.mainValue}>{prediction.predicted_bpm.toFixed(1)}</span>
+                                <div
+                                    className={`${styles.deltaBadge} ${
+                                        prediction.predicted_delta > 0 ? styles.red : styles.green
                                     }`}
                                 >
-                                    {prediction.predicted_delta > 0 ? "↗" : "↘"}{" "}
-                                    {Math.abs(prediction.predicted_delta).toFixed(2)}
-                                </span>
+                                    {prediction.predicted_delta > 0 ? "↑" : "↓"}{" "}
+                                    {Math.abs(prediction.predicted_delta).toFixed(1)}
+                                </div>
                             </div>
-                            <div className="mt-4 text-slate-400 text-sm flex items-center gap-2">
-                                <Activity className="w-4 h-4" /> Поточний: {stats[stats.length - 1]?.resting_hr} bpm
-                            </div>
+                            <p className={styles.cardFooter}>Прогноз на завтра</p>
                         </Card>
 
-                        {/* Details Card */}
-                        <Card>
-                            <div className="text-sm text-slate-400 mb-4 font-semibold uppercase tracking-wider">
-                                Вплив факторів (SHAP)
-                            </div>
-                            <div className="space-y-3">
+                        {/* КАРТКА ВПЛИВУ ФАКТОРІВ */}
+                        <Card className={styles.factorsCard}>
+                            <h4 className={styles.smallTitle}>Вплив на результат (SHAP)</h4>
+                            <div className={styles.factorsList}>
                                 {Object.entries(prediction.details || {}).map(([key, val]) => (
-                                    <div
-                                        key={key}
-                                        className="flex justify-between items-center p-2.5 bg-slate-900/50 rounded-lg border border-slate-800"
-                                    >
-                                        <span className="uppercase text-xs font-bold text-slate-500">
-                                            {key.split("_").join(" ")}
-                                        </span>
-                                        <span
-                                            className={`font-mono font-bold ${
-                                                val > 0 ? "text-red-400" : "text-green-400"
-                                            }`}
-                                        >
-                                            {val > 0 ? "+" : ""}
-                                            {val.toFixed(2)}
+                                    <div key={key} className={styles.factorItem}>
+                                        <span className={styles.factorName}>{key.replace("_", " ")}</span>
+                                        <span className={val > 0 ? styles.factorPlus : styles.factorMinus}>
+                                            {val > 0 ? `+${val.toFixed(2)}` : val.toFixed(2)}
                                         </span>
                                     </div>
                                 ))}
@@ -155,26 +134,19 @@ const Forecast = () => {
                         </Card>
                     </div>
 
-                    {/* AI Advice Card */}
+                    {/* AI ADVICE */}
                     {aiAdvice && (
-                        <Card className="border-blue-500/30 bg-blue-900/10">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="p-2 bg-blue-500 rounded-lg text-white shadow-lg shadow-blue-500/20">
-                                    <Brain className="w-5 h-5" />
-                                </div>
-                                <h3 className="text-xl font-bold text-white">Рекомендація Тренера</h3>
+                        <Card className={styles.adviceCard}>
+                            <div className={styles.adviceHeader}>
+                                <div className={styles.adviceAvatar}>AI</div>
+                                <h4>Рекомендація на основі аналізу</h4>
                             </div>
-                            <div className="prose prose-invert max-w-none text-slate-200 whitespace-pre-line leading-relaxed text-sm md:text-base">
-                                {aiAdvice}
-                            </div>
+                            <div className={styles.adviceText}>{aiAdvice}</div>
                         </Card>
                     )}
 
-                    <button
-                        onClick={() => setPrediction(null)}
-                        className="text-slate-400 hover:text-white hover:underline text-sm w-full text-center py-4 transition-colors"
-                    >
-                        Зробити новий аналіз
+                    <button onClick={() => setPrediction(null)} className={styles.resetBtn}>
+                        <RefreshCw size={14} /> Новий аналіз
                     </button>
                 </div>
             )}

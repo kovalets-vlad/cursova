@@ -1,0 +1,105 @@
+/* Контейнер, який ти вказав (flex items-start gap-4 w-full group mb-2) */
+.inputGroup {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    width: 100%;
+    margin-bottom: 8px;
+}
+
+/* Контейнер для цифри та лінії */
+.stepWrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    align-self: stretch;
+}
+
+.stepCircle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid #334155; /* slate-700 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #cbd5e1; /* slate-300 */
+    font-weight: 700;
+    background-color: #0f172a; /* slate-900 */
+    transition: all 0.3s ease;
+    z-index: 10;
+}
+
+.stepLine {
+    position: absolute;
+    top: 40px;
+    bottom: -10px;
+    width: 2px;
+    background-color: #1e293b; /* slate-800 */
+}
+
+/* Стиль лінії для останнього елемента (приховаємо її через компонент) */
+.noLine {
+    display: none;
+}
+
+/* Поля вводу та лейбли */
+.fieldContainer {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-bottom: 24px;
+}
+
+.label {
+    font-size: 10px;
+    font-weight: 900;
+    color: #64748b; /* slate-500 */
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-left: 16px;
+    transition: color 0.3s ease;
+}
+
+.inputField {
+    width: 100wh;
+    background-color: #ffffff;
+    border: none;
+    border-radius: 9999px;
+    padding: 12px 24px;
+    color: #0f172a; /* slate-900 */
+    font-size: 16px;
+    font-weight: 600;
+    outline: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.inputField::placeholder {
+    color: #94a3b8; /* slate-400 */
+}
+
+.inputField:hover {
+    background-color: #f8fafc; /* slate-50 */
+}
+
+/* Ефекти фокусу (аналог Tailwind group-focus-within) */
+.inputGroup:focus-within .stepCircle {
+    border-color: #3b82f6; /* blue-500 */
+    color: #ffffff;
+}
+
+.inputGroup:focus-within .label {
+    color: #60a5fa; /* blue-400 */
+}
+
+.inputField:focus {
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
+.inputField:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
