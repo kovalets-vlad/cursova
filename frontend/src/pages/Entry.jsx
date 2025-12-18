@@ -1,24 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Calendar as CalendarIcon, Save, RefreshCw, Check, ChevronLeft, ChevronRight } from "lucide-react";
-import { useStats } from "../context/StatsContext.jsx"; // Наш новий хук
-import React, { useState, useEffect, useMemo } from "react";
-import { Calendar as CalendarIcon, Save, RefreshCw, Check, ChevronLeft, ChevronRight } from "lucide-react";
-import { useStats } from "../context/StatsContext.jsx"; // Наш новий хук
+import { useStats } from "../context/StatsContext.jsx";
 import { Card, Input } from "../components/UI.jsx";
-import {
-    format,
-    isSameDay,
-    parseISO,
-    startOfMonth,
-    endOfMonth,
-    eachDayOfInterval,
-    startOfWeek,
-    endOfWeek,
-    isToday,
-    addMonths,
-    subMonths,
-} from "date-fns";
-import { uk } from "date-fns/locale";
 import {
     format,
     isSameDay,
@@ -35,16 +18,7 @@ import {
 import { uk } from "date-fns/locale";
 import styles from "../module_styles/Entry.module.css";
 
-// ... (імпорти залишаються тими ж)
-
 const Entry = () => {
-    const { stats, fetchStats, addStat, updateStat } = useStats();
-
-    const [entry, setEntry] = useState({
-        date: format(new Date(), "yyyy-MM-dd"),
-        steps: 0,
-        minutesAsleep: 0,
-        stress_score: 0,
     const { stats, fetchStats, addStat, updateStat } = useStats();
 
     const [entry, setEntry] = useState({
@@ -57,15 +31,8 @@ const Entry = () => {
         very_active_minutes: 0,
         sleep_efficiency: 0,
     });
-        resting_hr: 0,
-        very_active_minutes: 0,
-        sleep_efficiency: 0,
-    });
 
     const [loading, setLoading] = useState(false);
-    const [mode, setMode] = useState("create");
-    const [viewDate, setViewDate] = useState(new Date());
-
     const [mode, setMode] = useState("create");
     const [viewDate, setViewDate] = useState(new Date());
 
@@ -99,18 +66,10 @@ const Entry = () => {
     }, [entry.date, stats]); // stats тут — ключ до динаміки
 
     const handleSave = async () => {
-    const handleSave = async () => {
         setLoading(true);
         try {
             const payload = {
                 ...entry,
-                steps: Number(entry.steps),
-                minutesAsleep: Number(entry.minutesAsleep),
-                stress_score: Number(entry.stress_score),
-                nightly_temperature: Number(entry.nightly_temperature),
-                resting_hr: Number(entry.resting_hr),
-                very_active_minutes: Number(entry.very_active_minutes),
-                sleep_efficiency: Number(entry.sleep_efficiency),
                 steps: Number(entry.steps),
                 minutesAsleep: Number(entry.minutesAsleep),
                 stress_score: Number(entry.stress_score),
@@ -211,7 +170,6 @@ const Entry = () => {
                             {format(parseISO(entry.date), "dd MMMM", { locale: uk })}
                         </div>
                     </div>
-                    </div>
 
                     <div className={styles.inputsGrid}>
                         {/* Твої Input компоненти тут */}
@@ -264,16 +222,6 @@ const Entry = () => {
                         />
                     </div>
 
-                    <button
-                        onClick={handleSave}
-                        disabled={loading}
-                        className={mode === "update" ? styles.updateBtn : styles.saveBtn}
-                    >
-                        {loading ? <RefreshCw className="animate-spin" /> : mode === "update" ? <Check /> : <Save />}
-                        {mode === "update" ? "Оновити дані" : "Зберегти запис"}
-                    </button>
-                </Card>
-            </div>
                     <button
                         onClick={handleSave}
                         disabled={loading}
