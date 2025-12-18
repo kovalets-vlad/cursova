@@ -18,6 +18,8 @@ import {
 import { uk } from "date-fns/locale";
 import styles from "../module_styles/Entry.module.css";
 
+// ... (імпорти залишаються тими ж)
+
 const Entry = () => {
     const { stats, fetchStats, addStat, updateStat } = useStats();
 
@@ -40,16 +42,16 @@ const Entry = () => {
         setEntry((prev) => ({ ...prev, [name]: value }));
     };
 
-    // Завантажуємо дані лише якщо вони ще не в контексті
     useEffect(() => {
         fetchStats();
     }, [fetchStats]);
 
-    // Слідкуємо за зміною дати, щоб підтягнути дані з кешу (stats)
+    // Цей useEffect тепер автоматично спрацює, коли StatsContext оновиться
     useEffect(() => {
         const existingStat = stats.find((s) => s.date === entry.date);
         if (existingStat) {
-            setEntry(existingStat);
+            // Важливо: копіюємо дані, щоб не мутувати стейт напряму
+            setEntry({ ...existingStat });
             setMode("update");
         } else {
             setEntry((prev) => ({
@@ -63,7 +65,7 @@ const Entry = () => {
             }));
             setMode("create");
         }
-    }, [entry.date, stats]);
+    }, [entry.date, stats]); // stats тут — ключ до динаміки
 
     const handleSave = async () => {
         setLoading(true);
@@ -83,8 +85,12 @@ const Entry = () => {
                 await updateStat(entry.date, payload);
             } else {
                 await addStat(payload);
+                // Після створення режим автоматично зміниться на 'update'
+                // через useEffect вище, бо запис з'явиться в stats
             }
-            alert("Успішно збережено!");
+
+            // Замість alert можна використовувати тости (toast), це приємніше
+            console.log("Дані синхронізовано з хмарою");
         } catch (e) {
             alert("Помилка: " + (e.response?.data?.detail || e.message));
         } finally {
@@ -92,7 +98,6 @@ const Entry = () => {
         }
     };
 
-    // Календар використовує stats з контексту для підсвітки
     const calendarDays = useMemo(() => {
         const start = startOfWeek(startOfMonth(viewDate), { weekStartsOn: 1 });
         const end = endOfWeek(endOfMonth(viewDate), { weekStartsOn: 1 });
@@ -102,7 +107,7 @@ const Entry = () => {
     return (
         <div className={styles.container}>
             <div className={styles.layoutGrid}>
-                {/* ЛІВА ЧАСТИНА: Календар */}
+                {/* КАЛЕНДАР */}
                 <Card className={styles.calendarCard}>
                     <div className={styles.calendarHeader}>
                         <button onClick={() => setViewDate(subMonths(viewDate, 1))}>
@@ -122,11 +127,8 @@ const Entry = () => {
                         ))}
                         {calendarDays.map((day) => {
                             const dateStr = format(day, "yyyy-MM-dd");
-
-                            // БУЛО: const isFilled = allStats.some((s) => s.date === dateStr);
-                            // МАЄ БУТИ (змінюємо на stats):
+                            // Динамічна перевірка: якщо дата є в масиві stats — кнопка стане зеленою
                             const isFilled = stats.some((s) => s.date === dateStr);
-
                             const isSelected = entry.date === dateStr;
 
                             return (
@@ -134,11 +136,15 @@ const Entry = () => {
                                     key={dateStr}
                                     onClick={() => handleChange("date", dateStr)}
                                     className={`
-                ${styles.dayBtn} 
-                ${isFilled ? styles.dayFilled : styles.dayEmpty}
-                ${isSelected ? styles.daySelected : ""}
-                ${!isSameDay(day, viewDate) && format(day, "M") !== format(viewDate, "M") ? styles.dayOffMonth : ""}
-            `}
+                                        ${styles.dayBtn} 
+                                        ${isFilled ? styles.dayFilled : styles.dayEmpty}
+                                        ${isSelected ? styles.daySelected : ""}
+                                        ${
+                                            !isSameDay(day, viewDate) && format(day, "M") !== format(viewDate, "M")
+                                                ? styles.dayOffMonth
+                                                : ""
+                                        }
+                                    `}
                                 >
                                     {format(day, "d")}
                                     {isToday(day) && <div className={styles.todayIndicator} />}
@@ -146,21 +152,21 @@ const Entry = () => {
                             );
                         })}
                     </div>
-
                     <div className={styles.legend}>
                         <div className={styles.legendItem}>
                             <span className={styles.dotGreen} /> Заповнено
                         </div>
+
                         <div className={styles.legendItem}>
                             <span className={styles.dotRed} /> Порожньо
                         </div>
                     </div>
                 </Card>
 
-                {/* ПРАВА ЧАСТИНА: Форма */}
+                {/* ФОРМА */}
                 <Card className={styles.formCard}>
                     <div className={styles.formHeader}>
-                        <h3 className={styles.title}>{mode === "update" ? "Оновлення даних" : "Новий запис"}</h3>
+                        <h3 className={styles.title}>{mode === "update" ? "Дані зафіксовано" : "Новий запис"}</h3>
                         <div className={styles.dateBadge}>
                             <CalendarIcon size={14} />
                             {format(parseISO(entry.date), "dd MMMM", { locale: uk })}
@@ -168,6 +174,7 @@ const Entry = () => {
                     </div>
 
                     <div className={styles.inputsGrid}>
+                        {/* Твої Input компоненти тут */}
                         <Input
                             label="Пульс (RHR)"
                             type="number"
@@ -180,30 +187,35 @@ const Entry = () => {
                             value={entry.steps}
                             onChange={(v) => handleChange("steps", v)}
                         />
+
                         <Input
                             label="Сон (хв)"
                             type="number"
                             value={entry.minutesAsleep}
                             onChange={(v) => handleChange("minutesAsleep", v)}
                         />
+
                         <Input
                             label="Стрес"
                             type="number"
                             value={entry.stress_score}
                             onChange={(v) => handleChange("stress_score", v)}
                         />
+
                         <Input
                             label="Активність (хв)"
                             type="number"
                             value={entry.very_active_minutes}
                             onChange={(v) => handleChange("very_active_minutes", v)}
                         />
+
                         <Input
                             label="Температура"
                             type="number"
                             value={entry.nightly_temperature}
                             onChange={(v) => handleChange("nightly_temperature", v)}
                         />
+
                         <Input
                             label="Ефективність сну (%)"
                             type="number"

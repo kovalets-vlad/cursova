@@ -26,22 +26,34 @@ export const StatsProvider = ({ children }) => {
         [isLoaded]
     );
 
-    // Додавання (Локально + Бекенд)
-    const addStat = async (newEntry) => {
-        const res = await api.post("/api/stats/manual_entry", newEntry);
-        const savedEntry = res.data;
-        // Оновлюємо стейт: додаємо новий запис до масиву
-        setStats((prev) => [...prev, savedEntry]);
-        return savedEntry;
+    //     // --- ДОДАВАННЯ ЗАПИСУ ---
+    const addStat = async (newStat) => {
+        try {
+            const response = await api.post("/api/stats/manual_entry", newStat);
+
+            const createdStat = response.data.data;
+
+            setStats((prev) => [...prev, createdStat]);
+            return createdStat;
+        } catch (error) {
+            console.error("Помилка при створенні:", error);
+            throw error;
+        }
     };
 
-    // Оновлення (Локально + Бекенд)
+    // --- ОНОВЛЕННЯ ЗАПИСУ ---
     const updateStat = async (date, updatedData) => {
-        const res = await api.patch(`/api/stats/${date}`, updatedData);
-        const savedEntry = res.data;
-        // Оновлюємо стейт: замінюємо старий об'єкт новим за датою
-        setStats((prev) => prev.map((s) => (s.date === date ? savedEntry : s)));
-        return savedEntry;
+        try {
+            const response = await api.patch(`/api/stats/${date}`, updatedData);
+
+            const updatedStat = response.data;
+
+            setStats((prev) => prev.map((s) => (s.date === date ? updatedStat : s)));
+            return updatedStat;
+        } catch (error) {
+            console.error("Помилка при оновленні:", error);
+            throw error;
+        }
     };
 
     return (

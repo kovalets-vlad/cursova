@@ -114,6 +114,7 @@
 .predictionCard {
     background: linear-gradient(135deg, rgba(30, 58, 138, 0.3) 0%, rgba(15, 23, 42, 0.9) 100%) !important;
     border-color: rgba(59, 130, 246, 0.3) !important;
+    padding: 10px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -150,6 +151,7 @@
 
 .factorsCard {
     background: rgba(30, 41, 59, 0.3) !important;
+    padding: 10px;
 }
 
 .factorsList {
@@ -189,6 +191,7 @@
 .adviceCard {
     background: rgba(59, 130, 246, 0.05) !important;
     border-color: rgba(59, 130, 246, 0.2) !important;
+    padding: 10px;
 }
 
 .adviceHeader {
