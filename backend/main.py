@@ -16,13 +16,13 @@ async def lifespan(app: FastAPI):
     print("🔄 Завантаження моделей та скейлерів...")
     try:
         models_data = {}
-        models_data['gru'] = load_model(f'{MODEL_PATH}gru3_delta_model.keras') 
-        models_data['lstm'] = load_model(f'{MODEL_PATH}lstm3_delta_model.keras')
-        models_data['cnn'] = load_model(f'{MODEL_PATH}cnn3_delta_model.keras')
+        models_data['gru'] = load_model(f'{MODEL_PATH}gru_model.keras') 
+        models_data['lstm'] = load_model(f'{MODEL_PATH}lstm_model.keras')
+        models_data['cnn'] = load_model(f'{MODEL_PATH}cnn_model.keras')
         
         models_data['scaler_X'] = joblib.load(f'{MODEL_PATH}scaler_X.pkl')
         models_data['scaler_Y'] = joblib.load(f'{MODEL_PATH}scaler_Y.pkl')
-        models_data['features'] = joblib.load(f'{MODEL_PATH}model_features.pkl')
+        models_data['features'] = joblib.load(f'{MODEL_PATH}features.pkl')
 
         app.state.ml_models = models_data
         print("✅ Система готова і моделі в пам'яті!")

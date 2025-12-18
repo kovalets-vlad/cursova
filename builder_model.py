@@ -1,394 +1,205 @@
+import os
 import pandas as pd
 import numpy as np
 import joblib
 import shap
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, mean_absolute_percentage_error
 from keras.models import Sequential
-from keras.layers import GRU, Dense, Dropout, Input, Conv1D, Flatten, MaxPooling1D, LSTM
+from keras.layers import GRU, Dense, Dropout, Input, Conv1D, LSTM, BatchNormalization, GlobalAveragePooling1D, Activation
 from joblib import Parallel, delayed
-import keras.backend as K
+from keras.optimizers import Adam
 
 # ==========================================
 # 1. НАЛАШТУВАННЯ
 # ==========================================
-# Вхідні дані
-dynamic_cols = [
-    'steps', 'very_active_minutes', 'minutesAsleep', 'sleep_efficiency', 
-    'nremhr', 'stress_score', 'nightly_temperature', 'resting_hr',
-    # НОВІ "ДОВГІ" ФІЧІ:
-    'chronic_steps', 'acute_steps', 'acwr' 
-]
-# Статичні ознаки (не змінюються з часом)
+dynamic_cols = ['steps', 'very_active_minutes', 'minutesAsleep', 'sleep_efficiency', 
+                'nremhr', 'stress_score', 'nightly_temperature', 'resting_hr',
+                'chronic_steps', 'acute_steps', 'acwr']
 static_cols = ['age', 'bmi']
-# Інформація про вихідні дні
 weekend_col = ['is_weekend']
-
-# Цільова колонка - Delta (зміна пульсу)
 target_col = 'hr_delta' 
+DAYS_WINDOW = 3 
 
-# Розмір часового вікна для аналізу (кількість днів в історії)
-DAYS_WINDOW = 3  # Модель дивиться на 3 днів назад для предикції
+MODEL_TYPES = ['GRU', 'LSTM', 'CNN']
+BASE_OUTPUT_DIR = 'cursova/models_ensemble'
 
 # ==========================================
-# 2. ФУНКЦІЇ
+# 2. ФУНКЦІЇ МОДЕЛЕЙ ТА ОБРОБКИ
 # ==========================================
-
-def create_dataset(dataset, target_index, time_steps=DAYS_WINDOW):
-    """
-    Створює слайдуючі вікна часових рядів.
-    
-    Args:
-        dataset: Масив даних (n_samples, n_features)
-        target_index: Індекс цільової змінної
-        time_steps: Розмір вікна (DAYS_WINDOW днів)
-    
-    Returns:
-        X: Масив форми (n_samples, time_steps, n_features) - входи для моделі
-        Y: Масив цільових значень для кожного вікна
-    """
-    X, Y = [], []
-    for i in range(len(dataset) - time_steps):
-        X.append(dataset[i:(i + time_steps), :])
-        Y.append(dataset[i + time_steps, target_index])
-    return np.array(X), np.array(Y)
 
 def build_model(input_shape, model_type='GRU'):
-    """
-    Будує нейронну мережу для предикції.
-    
-    Args:
-        input_shape: Кортеж (DAYS_WINDOW, n_features) - форма входу
-        model_type: Тип архітектури ('GRU', 'LSTM' або 'CNN')
-    
-    Returns:
-        model: Скомпільована Keras модель
-    
-    Примітка:
-        - GRU/LSTM хороші для послідовностей
-        - CNN краща для локальних патернів
-    """
     model = Sequential()
     model.add(Input(shape=input_shape))
-    
     if model_type == 'GRU':
-        # GRU шари для обробки часових рядів
-        model.add(GRU(64, return_sequences=True))  # Повертає всю послідовність
-        model.add(Dropout(0.3))  # Регуляризація (вимикає 30% нейронів)
-        model.add(GRU(64))  # Фінальний шар повертає тільки останній вихід
-        
+        model.add(GRU(64, return_sequences=True))
+        model.add(BatchNormalization())
+        model.add(Dropout(0.3))
+        model.add(GRU(64))
     elif model_type == 'LSTM':
-        # LSTM - альтернатива GRU з більшою пам'яттю
-        model.add(LSTM(64, return_sequences=True))
+        model.add(LSTM(128, return_sequences=True)) 
+        model.add(BatchNormalization())
         model.add(Dropout(0.3))
         model.add(LSTM(64))
-        
-    elif model_type == 'CNN':
-        # Згорткові шари для пошуку локальних патернів
-        model.add(Conv1D(filters=64, kernel_size=2, activation='relu'))
-        model.add(MaxPooling1D(pool_size=1))
-        model.add(Flatten())  # Розгортання в 1D вектор
-        model.add(Dense(50, activation='relu'))
+        model.add(BatchNormalization())
 
-    # Фінальні шари для передикції однієї цінності (зміна пульсу)
-    model.add(Dropout(0.3))
+        model.add(Dense(64, activation='relu'))
+        model.add(Dense(32, activation='relu'))
+    elif model_type == 'CNN':
+        model.add(Conv1D(filters=64, kernel_size=2, padding='same'))
+        model.add(BatchNormalization())
+        model.add(Activation('relu'))
+        model.add(Conv1D(filters=128, kernel_size=2, padding='same'))
+        model.add(BatchNormalization())
+        model.add(Activation('relu'))
+        model.add(GlobalAveragePooling1D())
+
+    model.add(Dense(64, activation='relu'))
+    model.add(Dropout(0.2))
     model.add(Dense(32, activation='relu'))
-    model.add(Dense(1))  # Вихід - одне число (зміна в BPM)
-    model.compile(optimizer='adam', loss='mse')  # MSE для регресії
+    model.add(Dense(1)) 
+    model.compile(optimizer=Adam(learning_rate=0.001), loss='mse')
     return model
 
-def process_user_with_delta(df, user_id, dynamic_cols, static_cols, scaler_X=None, scaler_Y=None):
-    """
-    Препроцесує дані одного користувача.
-    
-    Args:
-        df: DataFrame з усіма даними
-        user_id: ID користувача
-        dynamic_cols: Список динамічних ознак
-        static_cols: Список статичних ознак
-        scaler_X: Попередньо навчений scaler для X (якщо None - навчається на цьому користувачеві)
-        scaler_Y: Попередньо навчений scaler для Y (цільова змінна)
-    
-    Returns:
-        X_final: Масив ознак (n_days, n_features)
-        y_scaled: Масштабована цільова змінна (зміна пульсу)
-        scaler_X: Використаний scaler для X
-        scaler_Y: Використаний scaler для Y
-        raw_bpm: Початкові значення пульсу (для розрахунку абсолютних значень)
-    """
-    # Вибираємо дані користувача та заповнюємо пропуски
+def process_user_with_delta(df, user_id, dynamic_cols, static_cols, scaler_X, scaler_Y):
     user_df = df[df['id'] == user_id].copy()
+    user_df['age'] = pd.to_numeric(user_df['age'], errors='coerce').fillna(30)
+    user_df['bmi'] = pd.to_numeric(user_df['bmi'], errors='coerce').fillna(25)
     
-    # 1. ОБЧИСЛЮЄМО "ДОВГІ" МЕТРИКИ (до видалення NaN)
-    # Chronic Load (Хронічне навантаження) - середнє за 28 днів (4 тижні)
-    # min_periods=1 дозволяє рахувати навіть на початку, поки немає 28 днів
+    # Розрахунок метрик
     user_df['chronic_steps'] = user_df['steps'].rolling(window=28, min_periods=1).mean()
-    
-    # Acute Load (Гостре навантаження) - середнє за 7 днів
     user_df['acute_steps'] = user_df['steps'].rolling(window=7, min_periods=1).mean()
-    
-    # ACWR (Acute:Chronic Workload Ratio)
-    # Додаємо +1 у знаменник, щоб уникнути ділення на 0, якщо юзер не ходив місяць
     user_df['acwr'] = user_df['acute_steps'] / (user_df['chronic_steps'] + 1)
-    
-    # 2. СТВОРЮЄМО DELTA (ЗМІНУ)
     user_df['hr_delta'] = user_df['resting_hr'].diff().fillna(0)
     
-    # Заповнюємо пропуски, які могли виникнути (ffill/bfill)
     user_df = user_df.ffill().bfill()
-    
-    # Видаляємо перший рядок (бо там delta некоректна)
     user_df = user_df.iloc[1:].reset_index(drop=True)
 
-    # 3. Обробка X (Вхідні дані)
-    # Тепер input_features включає і нові колонки (acwr, chronic...), бо ми додали їх у dynamic_cols
-    input_features = user_df[dynamic_cols].values
+    # Стандартизація через ГЛОБАЛЬНІ скалери
+    dyn_scaled = scaler_X.transform(user_df[dynamic_cols].values)
+    stat_data = user_df[static_cols].values.astype(float)
+    stat_data[:, 0] /= 100.0
+    stat_data[:, 1] /= 50.0
+    X_final = np.hstack((dyn_scaled, stat_data, user_df[['is_weekend']].values))
     
-    # Скейлинг Динаміки (всіх 11 колонок)
-    if scaler_X is None:
-        scaler_X = StandardScaler()
-        dyn_scaled = scaler_X.fit_transform(input_features)
-    else:
-        dyn_scaled = scaler_X.transform(input_features)
-        
-    # Скейлинг Статики + Weekend
-    try:
-        stat_data = user_df[static_cols].values
-        stat_data[:, 0] = stat_data[:, 0] / 100.0 # Age
-        stat_data[:, 1] = stat_data[:, 1] / 50.0  # BMI
-        week_data = user_df[weekend_col].values
-    except KeyError:
-        stat_data = np.zeros((len(user_df), 2))
-        week_data = np.zeros((len(user_df), 1))
-        
-    X_final = np.hstack((dyn_scaled, stat_data, week_data))
-    
-    # 4. Обробка Y (Тільки Delta)
-    target_values = user_df[[target_col]].values
-    if scaler_Y is None:
-        scaler_Y = StandardScaler()
-        y_scaled = scaler_Y.fit_transform(target_values)
-    else:
-        y_scaled = scaler_Y.transform(target_values)
-        
-    raw_bpm = user_df['resting_hr'].values
-        
-    return X_final, y_scaled, scaler_X, scaler_Y, raw_bpm
+    y_scaled = scaler_Y.transform(user_df[[target_col]].values)
+    # ПОВЕРТАЄМО РІВНО 3 ЗНАЧЕННЯ
+    return X_final, y_scaled, user_df['resting_hr'].values
 
 # ==========================================
-# 3. ОСНОВНИЙ ЦИКЛ (5-Fold Cross-Validation)
+# 3. ОСНОВНИЙ ЦИКЛ НАВЧАННЯ
 # ==========================================
-# 5-Fold CV розділяє користувачів на 5 груп дляефективної оцінки
 if __name__ == "__main__":
-    # Завантажуємо та препроцесуємо дані
-    df = pd.read_csv('cursova/daily_fitbit_sema_df_processed.csv') 
-    df['age'] = pd.to_numeric(df['age'], errors='coerce').fillna(30)  # Заповнюємо пропуски
-    df['bmi'] = pd.to_numeric(df['bmi'], errors='coerce').fillna(25)
+    df = pd.read_csv('cursova/daily_fitbit_sema_df_processed.csv')
     df['date'] = pd.to_datetime(df['date'])
-    # Визначаємо вихідні дні (субота=5, неділя=6)
     df['is_weekend'] = (df['date'].dt.dayofweek >= 5).astype(int)
 
-    # Розділяємо користувачів для 5-Fold CV
+    # Попередня підготовка колонок для навчання скалерів
+    df['chronic_steps'] = df.groupby('id')['steps'].transform(lambda x: x.rolling(window=28, min_periods=1).mean())
+    df['acute_steps'] = df.groupby('id')['steps'].transform(lambda x: x.rolling(window=7, min_periods=1).mean())
+    df['acwr'] = df['acute_steps'] / (df['chronic_steps'] + 1)
+    df[['chronic_steps', 'acute_steps', 'acwr']] = df[['chronic_steps', 'acute_steps', 'acwr']].ffill().bfill()
+
     all_users = df['id'].unique().tolist()
-    user_folds = np.array_split(all_users, 5)  # 5 групп користувачів
-    
-    print(f"🚀 Запуск Delta-Prediction (Window={DAYS_WINDOW} days)...")
+    user_folds = np.array_split(all_users, 5) 
 
-    def evaluate_delta_fold(fold_idx, folds):
-        """
-        Оцінює модель на одному фолді CV.
-        
-        Args:
-            fold_idx: Індекс тестового фолду (0-4)
-            folds: Список всіх фолдів користувачів
-        
-        Returns:
-            Кортеж (MAE, MSE, R2) - метрики на тестовому наборі
-        """
-        # Розділ 1: Підготовка тренувальної та тестової групи
-        test_group = folds[fold_idx]  # 20% користувачів для тестування
-        train_group = np.concatenate([folds[i] for i in range(5) if i != fold_idx])  # 80% для навчання
-        
-        # --- ПІДГОТОВКА TRAIN ДАНИХ ---
-        X_train_list, y_train_list = [], []
-        
-        for u in train_group:
-            # Обробляємо кожного користувача з тренувальної групи
-            X_u, y_u_scaled, _, _, _ = process_user_with_delta(df, u, dynamic_cols, static_cols)
+    # --- КРОК 1: ГЛОБАЛЬНІ СКЕЛЕРИ ---
+    print("📏 Навчання глобальних скалерів...")
+    global_scaler_X = StandardScaler().fit(df[dynamic_cols].values)
+    all_deltas = df.groupby('id')['resting_hr'].diff().fillna(0).values.reshape(-1, 1)
+    global_scaler_Y = StandardScaler().fit(all_deltas)
+
+    # --- КРОК 2: НАВЧАННЯ МОДЕЛЕЙ ---
+    for m_type in MODEL_TYPES:
+        print(f"\n" + "="*50 + f"\n🏗️  МОДЕЛЬ: {m_type}\n" + "="*50)
+        model_dir = os.path.join(BASE_OUTPUT_DIR, m_type.lower())
+        os.makedirs(model_dir, exist_ok=True)
+
+        def evaluate_fold(fold_idx):
+            test_group = user_folds[fold_idx]
+            train_group = np.concatenate([user_folds[i] for i in range(5) if i != fold_idx])
             
-            # Створюємо слайдуючі вікна розміром DAYS_WINDOW
-            # Для кожного вікна: X = 14 днів історії, Y = зміна пульсу на день 15
-            X_wins, y_wins = [], []
-            for i in range(len(X_u) - DAYS_WINDOW):
-                X_wins.append(X_u[i : i + DAYS_WINDOW])  # 14 днів (4D вектор)
-                y_wins.append(y_u_scaled[i + DAYS_WINDOW])  # Цінність на день 15
+            X_tr_list, y_tr_list = [], []
+            for u in train_group:
+                X_u, y_u_sc, _ = process_user_with_delta(df, u, dynamic_cols, static_cols, global_scaler_X, global_scaler_Y)
+                if len(X_u) > DAYS_WINDOW:
+                    for i in range(len(X_u) - DAYS_WINDOW):
+                        X_tr_list.append(X_u[i : i + DAYS_WINDOW])
+                        y_tr_list.append(y_u_sc[i + DAYS_WINDOW])
             
-            if len(X_wins) > 0:
-                X_train_list.append(np.array(X_wins))
-                y_train_list.append(np.array(y_wins))
-        
-        # Об'єднуємо всі вікна від усіх користувачів
-        X_train = np.concatenate(X_train_list, axis=0)  # Форма: (n_windows, 14, n_features)
-        y_train = np.concatenate(y_train_list, axis=0)  # Форма: (n_windows,)
-        
-        # --- НАВЧАННЯ МОДЕЛІ ---
-        model = build_model((X_train.shape[1], X_train.shape[2]), model_type='GRU')
-        model.fit(X_train, y_train, epochs=20, batch_size=32, verbose=0)
-        
-        # --- ТЕСТУВАННЯ НА КОЖНОМУ КОРИСТУВАЧІ ---
-        mae_list, mse_list, r2_list = [], [], []
-        
-        for test_user in test_group:
-            # Обробляємо тестового користувача
-            X_u, y_u_scaled, sc_X, sc_Y, raw_bpm = process_user_with_delta(df, test_user, dynamic_cols, static_cols)
+            if not X_tr_list: return None
             
-            X_test, y_test_scaled = [], []
-            actual_prev_bpm = []   # Пульс в останній день вікна
-            actual_future_bpm = []  # Реальний пульс наступного дня
+            X_tr_np, y_tr_np = np.array(X_tr_list), np.array(y_tr_list)
+            model = build_model((DAYS_WINDOW, X_tr_np.shape[2]), m_type)
+            model.fit(X_tr_np, y_tr_np, epochs=20, batch_size=32, verbose=0)
             
-            # Створюємо тестові вікна
-            for i in range(len(X_u) - DAYS_WINDOW):
-                X_test.append(X_u[i : i + DAYS_WINDOW])
-                y_test_scaled.append(y_u_scaled[i + DAYS_WINDOW])
+            # Оцінка
+            metrics = {'MAE':[], 'MAPE':[], 'MSE':[], 'RMSE':[], 'R2':[]}
+            for u in test_group:
+                X_u, y_u_sc, raw_hr = process_user_with_delta(df, u, dynamic_cols, static_cols, global_scaler_X, global_scaler_Y)
+                if len(X_u) <= DAYS_WINDOW: continue
                 
-                # raw_bpm[i + DAYS_WINDOW - 1] = пульс на день 14 (останній день в вікні)
-                actual_prev_bpm.append(raw_bpm[i + DAYS_WINDOW - 1]) 
-                # raw_bpm[i + DAYS_WINDOW] = реальний пульс на день 15 (цільовий день)
-                actual_future_bpm.append(raw_bpm[i + DAYS_WINDOW])
+                X_ts_wins = np.array([X_u[i:i+DAYS_WINDOW] for i in range(len(X_u)-DAYS_WINDOW)])
+                pred_z = model.predict(X_ts_wins, verbose=0)
+                pred_bpm = raw_hr[DAYS_WINDOW-1:-1] + global_scaler_Y.inverse_transform(pred_z).flatten()
+                real_bpm = raw_hr[DAYS_WINDOW:]
+                
+                metrics['MAE'].append(mean_absolute_error(real_bpm, pred_bpm))
+                metrics['MAPE'].append(mean_absolute_percentage_error(real_bpm, pred_bpm))
+                metrics['MSE'].append(mean_squared_error(real_bpm, pred_bpm))
+                metrics['RMSE'].append(np.sqrt(mean_squared_error(real_bpm, pred_bpm)))
+                metrics['R2'].append(r2_score(real_bpm, pred_bpm))
             
-            if len(X_test) == 0: 
-                continue
-            
-            # Робимо передикції
-            X_test = np.array(X_test)
-            pred_delta_z = model.predict(X_test, verbose=0)  # Передикована зміна (масштабована)
-            pred_delta_bpm = sc_Y.inverse_transform(pred_delta_z).flatten()  # Повертаємо до оригіналу
-            
-            # Абсолютна передикція пульсу = пульс сьогодні + передикована зміна
-            pred_final_bpm = np.array(actual_prev_bpm) + pred_delta_bpm
-            y_real_bpm = np.array(actual_future_bpm)
-            
-            # Обчислюємо метрики точності
-            mae_list.append(mean_absolute_error(y_real_bpm, pred_final_bpm))
-            mse_list.append(mean_squared_error(y_real_bpm, pred_final_bpm))
-            r2_list.append(r2_score(y_real_bpm, pred_final_bpm))
-            
-        return np.mean(mae_list), np.mean(mse_list), np.mean(r2_list)
+            return {k: np.mean(v) for k, v in metrics.items()}
 
-    # Запуск 5-Fold CV паралельно (на всіх ядрах процесора)
-    results = Parallel(n_jobs=5)(delayed(evaluate_delta_fold)(i, user_folds) for i in range(5))
-    
-    # Збираємо результати з усіх фолдів
-    mae_final = [res[0] for res in results]
-    mse_final = [res[1] for res in results]
-    r2_final = [res[2] for res in results]
-    
-    # Виводимо усереднені результати
-    print("\n" + "="*40)
-    print(f"РЕЗУЛЬТАТИ DELTA-PREDICTION (Window={DAYS_WINDOW})")
-    print("="*40)
-    print(f"MAE: {np.mean(mae_final):.2f} BPM")  # Середня абсолютна помилка
-    print(f"MSE: {np.mean(mse_final):.2f} BPM")  # Середня квадратична помилка
-    print(f"RMSE: {np.mean(np.sqrt(mse_final)):.2f} BPM")  # Корінь MSE
-    print(f"R2:  {np.mean(r2_final):.4f}")  # Коефіцієнт детермінації (0-1, чим вище тим краще)
+        # Запуск CV
+        print(f"🧪 Запуск Cross-Validation...")
+        cv_res = Parallel(n_jobs=5)(delayed(evaluate_fold)(i) for i in range(5))
+        cv_res = [r for r in cv_res if r is not None]
 
-    # ==========================================
-    # 5. SHAP (Interpretability) & SAVE
-    # ==========================================
-    # SHAP аналізує вклад кожної ознаки в передикцію
-    print("\n🔄 Перенавчання фінальної моделі для SHAP...")
+        print(f"📈 AVG Metrics: MAE={np.mean([r['MAE'] for r in cv_res]):.2f}, MAPE={np.mean([r['MAPE'] for r in cv_res]):.2f}, MSE={np.mean([r['MSE'] for r in cv_res]):.2f}, RMSE={np.mean([r['RMSE'] for r in cv_res]):.2f}, R2={np.mean([r['R2'] for r in cv_res]):.4f}")
 
-    test_users_group = user_folds[-1]  # Остання група для тестування
-    train_users_group = np.concatenate(user_folds[:-1])  # Перші 4 групи для навчання
+        # Фінальне навчання
+        X_all, y_all = [], []
+        for u in all_users:
+            X_u, y_u_sc, _ = process_user_with_delta(df, u, dynamic_cols, static_cols, global_scaler_X, global_scaler_Y)
+            if len(X_u) > DAYS_WINDOW:
+                for i in range(len(X_u) - DAYS_WINDOW):
+                    X_all.append(X_u[i : i + DAYS_WINDOW])
+                    y_all.append(y_u_sc[i + DAYS_WINDOW])
 
-    # 1. TRAIN PREP - як раніше
-    X_train_list, y_train_list = [], []
-    for train_user in train_users_group:
-        X_u, y_u_scaled, _, _, _ = process_user_with_delta(df, train_user, dynamic_cols, static_cols)
+        X_final_np, y_final_np = np.array(X_all), np.array(y_all)
+        final_model = build_model((DAYS_WINDOW, X_final_np.shape[2]), m_type)
+        final_model.fit(X_final_np, y_final_np, epochs=25, batch_size=32, verbose=0)
+
+        # --- КРОК 3: SHAP АНАЛІЗ ---
+        print(f"🔍 Розрахунок SHAP...")
+        bg_idx = np.random.choice(X_final_np.shape[0], 100, replace=False)
+        # Функція-обгортка для SHAP, яка розгортає 2D дані назад у 3D
+        def predict_for_shap(x_flat):
+            x_3d = x_flat.reshape(-1, DAYS_WINDOW, X_final_np.shape[2])
+            return final_model.predict(x_3d, verbose=0)
+
+        explainer = shap.KernelExplainer(predict_for_shap, shap.kmeans(X_final_np[bg_idx].reshape(100, -1), 10))
+        test_idx = np.random.choice(X_final_np.shape[0], 30, replace=False)
+        shap_values = explainer.shap_values(X_final_np[test_idx].reshape(30, -1))
         
-        X_wins, y_wins = [], []
-        for i in range(len(X_u) - DAYS_WINDOW):
-            X_wins.append(X_u[i : i + DAYS_WINDOW])
-            y_wins.append(y_u_scaled[i + DAYS_WINDOW])
-            
-        if len(X_wins) > 0:
-            X_train_list.append(np.array(X_wins))
-            y_train_list.append(np.array(y_wins))
+        # Обробка виходу SHAP (для регресії це зазвичай список з одного масиву або просто масив)
+        if isinstance(shap_values, list): sv = shap_values[0]
+        else: sv = shap_values
 
-    X_train = np.concatenate(X_train_list, axis=0)
-    y_train = np.concatenate(y_train_list, axis=0)
+        plt.figure(figsize=(10, 6))
+        # Усереднюємо SHAP-значення за часовим вікном (3 дні)
+        shap.summary_plot(np.mean(sv.reshape(-1, DAYS_WINDOW, X_final_np.shape[2]), axis=1), 
+                          np.mean(X_final_np[test_idx], axis=1), 
+                          feature_names=dynamic_cols+static_cols+weekend_col, show=False)
+        plt.savefig(os.path.join(model_dir, 'shap_summary.png'))
+        plt.close()
 
-    # 2. TEST PREP - один користувач для SHAP аналізу
-    target_test_user = test_users_group[0]
-    X_test_u, y_test_u, test_scaler_X, test_scaler_Y, _ = process_user_with_delta(df, target_test_user, dynamic_cols, static_cols)
-    
-    X_test_wins = []
-    for i in range(len(X_test_u) - DAYS_WINDOW):
-        X_test_wins.append(X_test_u[i : i + DAYS_WINDOW])
-    X_test = np.array(X_test_wins)
-
-    # 3. FINAL TRAIN - навчаємо нову модель на всіх тренувальних даних
-    model = build_model((X_train.shape[1], X_train.shape[2]), model_type='GRU')
-    model.fit(X_train, y_train, epochs=25, batch_size=32, verbose=0)
-
-    # --- SHAP ANALYSIS ---
-    print("Рахуємо SHAP values...")
-    # Розгортаємо 3D дані в 2D для SHAP
-    X_train_flat = X_train.reshape(X_train.shape[0], -1)
-    
-    # Список назв усіх ознак
-    all_features = dynamic_cols + static_cols
-    if 'is_weekend' in df.columns:
-        all_features += ['is_weekend']
-
-    # SHAP використовує підмножину даних як фон для порівняння (k-means спрощує)
-    background_summary = shap.kmeans(X_train_flat, 20) 
-
-    def predict_wrapper(data_flat):
-        """
-        Обгортка для передачі розгорнутих даних у модель.
-        SHAP ока передає 2D дані, а модель очікує 3D (часові ряди).
-        """
-        n_features = X_train.shape[2]
-        # Розгортаємо назад в 3D форму
-        data_3d = data_flat.reshape(-1, DAYS_WINDOW, n_features)
-        return model.predict(data_3d, verbose=0)
-
-    # KernelExplainer більш універсальний але повільніший за DeepExplainer
-    explainer = shap.KernelExplainer(predict_wrapper, background_summary)
-    
-    # Беремо перші 50 тестових вікон для аналізу
-    X_test_sample = X_test[:50]
-    X_test_sample_flat = X_test_sample.reshape(50, -1)
-    
-    # Розраховуємо SHAP values (вклад кожної ознаки)
-    shap_values = explainer.shap_values(X_test_sample_flat)
-
-    # Обробка SHAP output (може бути список для багатовиходу)
-    n_features = X_train.shape[2]
-    if isinstance(shap_values, list):
-        shap_vals = shap_values[0]  # Беремо перший вихід
-    else:
-        shap_vals = shap_values
-
-    # Розгортаємо SHAP values назад у 3D (часові ряди)
-    shap_values_3d = shap_vals.reshape(-1, DAYS_WINDOW, n_features)
-    # Усередняємо вклади по днях (сумуємо вклад кожної ознаки за усіма днями)
-    shap_values_combined = np.sum(shap_values_3d, axis=1) 
-
-    # Усередняємо дані по днях для візуалізації
-    X_test_sample_3d = X_test_sample.reshape(-1, DAYS_WINDOW, n_features)
-    X_test_sample_combined = np.mean(X_test_sample_3d, axis=1)
-
-    # Візуалізуємо важливість ознак
-    plt.figure(figsize=(10, 6))
-    shap.summary_plot(shap_values_combined, X_test_sample_combined, feature_names=all_features)
-    
-    # Збереження моделі та скалерів для подальшого використання
-    print("\n💾 Збереження файлів...")
-    model.save(f'gru{DAYS_WINDOW}_delta_model.keras')  # Збереженя як gru14_delta_model.keras
-    joblib.dump(test_scaler_X, 'scaler_X.pkl')  # Для масштабування входу
-    joblib.dump(test_scaler_Y, 'scaler_Y.pkl')  # Для зворотного масштабування виходу
-    joblib.dump(all_features, 'model_features.pkl')  # Назви ознак для тестування
-    print("✅ Все збережено успішно!")
+        # Збереження
+        final_model.save(os.path.join(model_dir, f'{m_type.lower()}_model.keras'))
+        joblib.dump(global_scaler_X, os.path.join(model_dir, 'scaler_X.pkl'))
+        joblib.dump(global_scaler_Y, os.path.join(model_dir, 'scaler_Y.pkl'))
+        joblib.dump(dynamic_cols+static_cols+weekend_col, os.path.join(model_dir, 'features.pkl'))
+        print(f"✅ {m_type} готовo!")
