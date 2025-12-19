@@ -1,8 +1,27 @@
 import os
+
+# 1. Налаштування змінних оточення для TensorFlow аби уникати попереджень
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['AUTOGRAPH_VERBOSITY'] = '0'
+
+import tensorflow as tf
+import logging
+
+# 2. Ігнорування попереджень від TensorFlow
+tf.get_logger().setLevel(logging.ERROR)
+tf.autograph.set_verbosity(0)
+
+import warnings
+
+# 3. Ігнорування попереджень
+warnings.filterwarnings("ignore")
+
 import pandas as pd
 import numpy as np
 import joblib
 import matplotlib.pyplot as plt
+import seaborn as sns
 from keras.models import load_model
 from sklearn.metrics import mean_absolute_error, r2_score, mean_squared_error
 
@@ -18,9 +37,13 @@ dynamic_cols = [
 static_cols = ['age', 'bmi']
 weekend_col = ['is_weekend']
 target_col = 'hr_delta'
+models_info = {}
 
-BASE_PATH = 'cursova/models_ensemble/'
-DATA_PATH = 'cursova/daily_fitbit_sema_df_processed.csv'
+DIR_PATH = os.path.dirname(os.path.abspath(__file__))
+BASE_PATH = os.path.join(DIR_PATH, 'models_ensemble')
+DATA_PATH = os.path.join(DIR_PATH, 'daily_fitbit_sema_df_processed.csv')
+PLOTS_PATH = os.path.join(BASE_PATH, 'plots')
+os.makedirs(PLOTS_PATH, exist_ok=True)
 
 # ==========================================
 # 2. ПІДГОТОВКА "ЧИСТИХ" ДАНИХ (БЕЗ СКЕЙЛИНГУ)
@@ -53,19 +76,19 @@ def get_clean_user_df(df, user_id):
 # ==========================================
 # 3. ЗАВАНТАЖЕННЯ АНСАМБЛЮ
 # ==========================================
-print("🔄 Завантаження моделей та їх індивідуальних скейлерів...")
-models_info = {}
-for m_name in ['gru', 'lstm', 'cnn']:
-    m_path = os.path.join(BASE_PATH, m_name)
-    models_info[m_name] = {
-        'model': load_model(os.path.join(m_path, f'{m_name}_model.keras')),
-        'scaler_X': joblib.load(os.path.join(m_path, 'scaler_X.pkl')),
-        'scaler_Y': joblib.load(os.path.join(m_path, 'scaler_Y.pkl'))
-        # 'model': load_model(f'cursova/models&scaller&features&test/{m_name}3_delta_model.keras'),
-        # 'scaler_X': joblib.load(f'cursova/models&scaller&features&test/scaler_X.pkl'),
-        # 'scaler_Y': joblib.load(f'cursova/models&scaller&features&test/scaler_Y.pkl')
-    }
-print("✅ Усі моделі та скейлери завантажено.")
+def load_models_and_scalers():
+    print("🔄 Завантаження моделей та їх індивідуальних скейлерів...")
+    for m_name in ['gru', 'lstm', 'cnn']:
+        m_path = os.path.join(BASE_PATH, m_name)
+        models_info[m_name] = {
+            'model': load_model(os.path.join(m_path, f'{m_name}_model.keras')),
+            'scaler_X': joblib.load(os.path.join(m_path, 'scaler_X.pkl')),
+            'scaler_Y': joblib.load(os.path.join(m_path, 'scaler_Y.pkl'))
+            # 'model': load_model(f'cursova/models&scaller&features&test/{m_name}3_delta_model.keras'),
+            # 'scaler_X': joblib.load(f'cursova/models&scaller&features&test/scaler_X.pkl'),
+            # 'scaler_Y': joblib.load(f'cursova/models&scaller&features&test/scaler_Y.pkl')
+        }
+    print("✅ Усі моделі та скейлери завантажено.")
 
 # ==========================================
 # 4. ОЦІНКА
@@ -183,7 +206,50 @@ def evaluate_on_users_global(user_ids, set_name, df):
         })
     return pd.DataFrame(results)
 
+def save_separate_metrics_plots(report_df):
+    # Налаштування стилю
+    sns.set_theme(style="whitegrid")
+    
+    # --- ГРАФІК 1: R2 SCORE (Точність) ---
+    plt.figure(figsize=(10, 6))
+    ax1 = sns.barplot(x='Model', y='R2', hue='Set', data=report_df, palette='Blues_d')
+    
+    plt.title('Порівняння коефіцієнта детермінації ($R^2$)', fontsize=14, pad=15)
+    plt.ylabel('Значення R^2 (0.0 - 1.0)')
+    plt.xlabel('Модель')
+    plt.ylim(0.8, 1.0) # Масштаб для наочності різниці
+    
+    # Додаємо цифри над стовпчиками
+    for container in ax1.containers:
+        ax1.bar_label(container, fmt='%.2f', padding=3)
+    
+    plt.tight_layout()
+    fig_path = os.path.join(PLOTS_PATH, 'models_accuracy_r2.png')
+    plt.savefig(fig_path, dpi=300, bbox_inches='tight')
+    plt.close() # Закриваємо, щоб не виводити в консоль, а тільки зберегти
+    print(f"✅ Графік R2 збережено як '{fig_path}'")
+
+    # --- ГРАФІК 2: MAE (Помилка) ---
+    plt.figure(figsize=(10, 6))
+    ax2 = sns.barplot(x='Model', y='MAE', hue='Set', data=report_df, palette='Reds_d')
+    
+    plt.title('Порівняння середньої абсолютної помилки (MAE)', fontsize=14, pad=15)
+    plt.ylabel('Помилка (BPM)')
+    plt.xlabel('Модель')
+    
+    # Додаємо цифри над стовпчиками
+    for container in ax2.containers:
+        ax2.bar_label(container, fmt='%.2f', padding=3)
+    
+    plt.tight_layout()
+    fig_path = os.path.join(PLOTS_PATH, 'models_error_mae.png')
+    plt.savefig(fig_path, dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"✅ Графік MAE збережено як '{fig_path}'")
+
+
 if __name__ == "__main__":
+    load_models_and_scalers()
     df_full = pd.read_csv(DATA_PATH)
     all_users = df_full['id'].unique()
     train_users = all_users[:int(len(all_users)*0.8)]
@@ -193,7 +259,12 @@ if __name__ == "__main__":
     test_results = evaluate_on_users(test_users, "Test", df_full)
 
     final_report = pd.concat([train_results, test_results]).groupby(['Model', 'Set']).mean().reset_index()
+    final_report['MAE'] = final_report['MAE'].round(2)
+    final_report['R2'] = final_report['R2'].round(2)
+    final_report['RMSE'] = final_report['RMSE'].round(2)
     print("\n" + "="*60)
     print("ЗВІТ ТОЧНОСТІ МОДЕЛЕЙ")
     print("="*60)
     print(final_report.sort_values(by=['Model', 'Set']).to_string(index=False))
+
+    save_separate_metrics_plots(final_report)

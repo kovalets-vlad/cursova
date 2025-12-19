@@ -96,7 +96,7 @@ const AuthPage = () => {
                             onChange={(e) => handleChange("password", e.target.value)}
                         />
                         <label className={styles.checkboxLabel}>
-                            <input type="checkbox" /> Запом'ятати мене
+                            <input type="checkbox" /> Запам'ятати мене
                         </label>
                         {error && isLogin && <p className={styles.error}>{error}</p>}
                         <button className={styles.button}>Увійти</button>
