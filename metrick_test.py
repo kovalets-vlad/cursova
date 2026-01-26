@@ -81,7 +81,7 @@ def load_models_and_scalers():
     for m_name in ['gru', 'lstm', 'cnn']:
         m_path = os.path.join(BASE_PATH, m_name)
         models_info[m_name] = {
-            'model': load_model(os.path.join(m_path, f'{m_name}_model.keras')),
+            'model': load_model(os.path.join(m_path, f'final_{m_name}_model.keras')),
             'scaler_X': joblib.load(os.path.join(m_path, 'scaler_X.pkl')),
             'scaler_Y': joblib.load(os.path.join(m_path, 'scaler_Y.pkl'))
             # 'model': load_model(f'cursova/models&scaller&features&test/{m_name}3_delta_model.keras'),
@@ -132,9 +132,9 @@ def evaluate_on_users(user_ids, set_name, df):
             model_predictions_bpm[m_name] = prev_bpm + p_delta
 
         # 3. Ансамблі
-        ens_weighted = (model_predictions_bpm['gru'] * 0.33 + 
-                        model_predictions_bpm['lstm'] * 0.33 + 
-                        model_predictions_bpm['cnn'] * 0.34)
+        ens_weighted = (model_predictions_bpm['gru'] * 0.25 + 
+                        model_predictions_bpm['lstm'] * 0.25 + 
+                        model_predictions_bpm['cnn'] * 0.5)
         
         preds_to_eval = {
             'GRU': model_predictions_bpm['gru'],
@@ -153,58 +153,6 @@ def evaluate_on_users(user_ids, set_name, df):
             })
 
     return pd.DataFrame(all_results)
-
-def evaluate_on_users_global(user_ids, set_name, df):
-    print(f"📊 Глобальний розрахунок: {set_name}...")
-    
-    # Словники для накопичення всіх прогнозів та реальних значень
-    all_preds = {m: [] for m in ['gru', 'lstm', 'cnn', 'ens_2']}
-    all_actuals = []
-
-    for u in user_ids:
-        user_df = get_clean_user_df(df, u)
-        if len(user_df) <= DAYS_WINDOW: continue
-
-        model_predictions_bpm = {}
-        y_real_bpm = user_df['resting_hr'].values[DAYS_WINDOW:]
-
-        for m_name, tools in models_info.items():
-            # Скейлинг та підготовка X_wins (як у вашому коді)
-            dyn_scaled = tools['scaler_X'].transform(user_df[dynamic_cols].values)
-            stat_data = user_df[static_cols].values.astype(float)
-            stat_data[:, 0] /= 100.0
-            stat_data[:, 1] /= 50.0
-            X_final_user = np.hstack((dyn_scaled, stat_data, user_df[['is_weekend']].values))
-
-            X_wins = np.array([X_final_user[i : i + DAYS_WINDOW] for i in range(len(X_final_user) - DAYS_WINDOW)])
-
-            # Прогноз
-            p_z = tools['model'].predict(X_wins, verbose=0)
-            p_delta = tools['scaler_Y'].inverse_transform(p_z).flatten()
-            
-            prev_bpm = user_df['resting_hr'].values[DAYS_WINDOW-1 : -1]
-            model_predictions_bpm[m_name] = prev_bpm + p_delta
-            
-            # Накопичуємо
-            all_preds[m_name].extend(model_predictions_bpm[m_name])
-
-        # Ансамбль GRU+LSTM
-        ens_2 = (model_predictions_bpm['gru'] + model_predictions_bpm['lstm']) / 2
-        all_preds['ens_2'].extend(ens_2)
-        all_actuals.extend(y_real_bpm)
-
-    # Розрахунок метрик по всьому накопиченому масиву
-    results = []
-    y_true = np.array(all_actuals)
-    for name in all_preds:
-        y_p = np.array(all_preds[name])
-        results.append({
-            "Model": name.upper(),
-            "Set": set_name,
-            "MAE": mean_absolute_error(y_true, y_p),
-            "R2": r2_score(y_true, y_p)
-        })
-    return pd.DataFrame(results)
 
 def save_separate_metrics_plots(report_df):
     # Налаштування стилю
@@ -247,6 +195,114 @@ def save_separate_metrics_plots(report_df):
     plt.close()
     print(f"✅ Графік MAE збережено як '{fig_path}'")
 
+def analyze_error_smoothing(user_ids, df, set_name="Test"):
+    """
+    Аналізує структуру помилок та ефект згладжування ансамблем.
+    """
+    print(f"🔍 Детальний аналіз помилок для вибірки: {set_name}...")
+    all_data = []
+
+    for u in user_ids:
+        user_df = get_clean_user_df(df, u)
+        if len(user_df) <= DAYS_WINDOW: continue
+
+        y_real = user_df['resting_hr'].values[DAYS_WINDOW:]
+        prev_bpm = user_df['resting_hr'].values[DAYS_WINDOW-1 : -1]
+        
+        # Отримуємо прогнози кожної моделі
+        preds = {}
+        for m_name, tools in models_info.items():
+            dyn_scaled = tools['scaler_X'].transform(user_df[dynamic_cols].values)
+            stat_data = user_df[static_cols].values.astype(float)
+            stat_data[:, 0] /= 100.0; stat_data[:, 1] /= 50.0
+            X_final = np.hstack((dyn_scaled, stat_data, user_df[['is_weekend']].values))
+            X_wins = np.array([X_final[i : i + DAYS_WINDOW] for i in range(len(X_final) - DAYS_WINDOW)])
+            
+            p_z = tools['model'].predict(X_wins, verbose=0)
+            p_delta = tools['scaler_Y'].inverse_transform(p_z).flatten()
+            preds[m_name] = prev_bpm + p_delta
+
+        # Ансамбль (середнє)
+        ens_pred = (preds['gru'] + preds['lstm'] + preds['cnn']) / 3
+
+        # Формуємо DataFrame для аналізу
+        for i in range(len(y_real)):
+            row_base = {"Actual_BPM": y_real[i], "User": u}
+            for m in ['gru', 'lstm', 'cnn']:
+                err = abs(y_real[i] - preds[m][i])
+                all_data.append({**row_base, "Model": m.upper(), "Error": err, "Type": "Single"})
+            
+            ens_err = abs(y_real[i] - ens_pred[i])
+            all_data.append({**row_base, "Model": "ENSEMBLE", "Error": ens_err, "Type": "Ensemble"})
+
+    analysis_df = pd.DataFrame(all_data)
+
+    # --- ГРАФІК 1: РОЗПОДІЛ ПОМИЛОК (VIOLIN PLOT) ---
+    plt.figure(figsize=(12, 6))
+    sns.violinplot(x='Model', y='Error', data=analysis_df, inner="quartile", palette="muted")
+    plt.title(f'Розподіл помилок: Чи згладжує Ансамбль? ({set_name})')
+    plt.ylabel('Абсолютна помилка (BPM)')
+    plt.ylim(0, analysis_df['Error'].quantile(0.99)) # Відсікаємо викиди для наочності
+    plt.savefig(os.path.join(PLOTS_PATH, 'error_distribution_violin.png'))
+    plt.show()
+
+    # --- ГРАФІК 2: ДЕ САМЕ МОДЕЛІ ПОМИЛЯЮТЬСЯ (Error vs Actual) ---
+    plt.figure(figsize=(12, 6))
+    # Використовуємо регресійну лінію, щоб побачити тренд помилки
+    for m in ['LSTM', 'ENSEMBLE']:
+        subset = analysis_df[analysis_df['Model'] == m]
+        sns.regplot(x='Actual_BPM', y='Error', data=subset, scatter=False, label=f'Тренд помилки {m}')
+    
+    plt.title('Чи зростає помилка при зміні пульсу?')
+    plt.xlabel('Реальний пульс (BPM)')
+    plt.ylabel('Середня помилка')
+    plt.legend()
+    plt.savefig(os.path.join(PLOTS_PATH, 'error_trend_by_bpm.png'))
+    plt.show()
+
+    # Вивід статистики згладжування
+    std_errors = analysis_df.groupby('Model')['Error'].std()
+    print("\n📉 Стабільність моделей (Standard Deviation of Error):")
+    print(std_errors.to_string())
+
+def analyze_model_diversity(user_ids, df):
+    print("🧠 Аналіз кореляції помилок (Diversity Analysis)...")
+    residuals_data = {m: [] for m in ['gru', 'lstm', 'cnn']}
+    
+    for u in user_ids:
+        user_df = get_clean_user_df(df, u) #
+        if len(user_df) <= DAYS_WINDOW: continue
+
+        y_real = user_df['resting_hr'].values[DAYS_WINDOW:]
+        prev_bpm = user_df['resting_hr'].values[DAYS_WINDOW-1 : -1]
+
+        for m_name, tools in models_info.items():
+            # Стандартний процес отримання прогнозу (як у вашому коді)
+            dyn_scaled = tools['scaler_X'].transform(user_df[dynamic_cols].values)
+            stat_data = user_df[static_cols].values.astype(float)
+            stat_data[:, 0] /= 100.0; stat_data[:, 1] /= 50.0
+            X_final = np.hstack((dyn_scaled, stat_data, user_df[['is_weekend']].values))
+            X_wins = np.array([X_final[i : i + DAYS_WINDOW] for i in range(len(X_final) - DAYS_WINDOW)])
+            
+            p_z = tools['model'].predict(X_wins, verbose=0)
+            p_delta = tools['scaler_Y'].inverse_transform(p_z).flatten()
+            pred_bpm = prev_bpm + p_delta
+            
+            # Розрахунок залишків (residuals)
+            res = y_real - pred_bpm
+            residuals_data[m_name].extend(res)
+
+    # Створення DataFrame із залишками
+    res_df = pd.DataFrame(residuals_data)
+    corr_matrix = res_df.corr()
+
+    # Візуалізація
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".2f", vmin=0, vmax=1)
+    plt.title('Кореляція помилок між моделями\n')
+    plt.show()
+
+    return corr_matrix
 
 if __name__ == "__main__":
     load_models_and_scalers()
@@ -268,3 +324,7 @@ if __name__ == "__main__":
     print(final_report.sort_values(by=['Model', 'Set']).to_string(index=False))
 
     save_separate_metrics_plots(final_report)
+    analyze_error_smoothing(test_users, df_full, "Test")
+    corr_res = analyze_model_diversity(test_users, df_full)
+    print("\nКореляційна матриця помилок моделей:")
+    print(corr_res.to_string())
